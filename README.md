@@ -1,0 +1,2 @@
+-data_processing.log -- логи после определенных частей кода, где было больше всего проблем
+-music_cnn_model.pth  -- веса для модели после обучения(весит много поэтому https://drive.google.com/file/d/11LMOSqkk-3YMp6YLxFJBDtJzyNKbO2CJ/view?usp=sharing)
