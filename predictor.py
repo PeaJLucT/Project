@@ -3,11 +3,9 @@ import librosa
 import numpy as np
 import torch.nn.functional as F
 import pandas as pd
-
-
 from CNN import MusicCNN
 from dataset import Mel 
-
+import random
 class GenrePredictor:
     def __init__(self, model_path, input_shape, num_classes, genre_map):
         """
@@ -85,7 +83,8 @@ class GenrePredictor:
         except Exception as e:
             print(f"Произошла ошибка при обработке файла {audio_path}: {e}")
             return []
-
+"""
+# Функция для проверки жанров своей песни
 if __name__ == '__main__':
     genres_df = pd.read_csv('final_dataset/track_genres.csv', index_col=0)
     genre_columns = genres_df.columns.astype(int).tolist() # Получаем ID жанров
@@ -114,7 +113,7 @@ if __name__ == '__main__':
     )
 
     # Путь до любого трека
-    test_track = 'Musics/mydataset/123.mp3'
+    test_track = 'Musics/mydataset/Russian Rap/madkid.flac'
 
     predicted_genres = predictor.predict_genres(test_track)
     
@@ -124,3 +123,71 @@ if __name__ == '__main__':
             print(f"  - {genre}: {probability:.2%}")
     else:
         print(f"\nНе удалось предсказать жанры '{test_track}'.")
+"""
+
+
+
+if __name__ == '__main__':
+    genres_df = pd.read_csv('final_dataset/track_genres.csv', index_col=0)
+    all_genres_info = pd.read_csv('Musics/fma_metadata/fma_metadata/genres.csv', index_col=0)
+    genre_id_to_name = all_genres_info['title'].to_dict()
+    genre_columns = genres_df.columns.astype(int).tolist()
+    final_genre_map = {i: genre_id_to_name[genre_id] for i, genre_id in enumerate(genre_columns)}
+    
+    SECONDS_PER_SAMPLE = 5
+    SAMPLE_RATE = 22050
+    mel_generator = Mel()
+    dummy_audio = np.zeros(SAMPLE_RATE * SECONDS_PER_SAMPLE)
+    dummy_spectrogram = mel_generator.generate(dummy_audio, SAMPLE_RATE)
+    dummy_tensor = torch.tensor(dummy_spectrogram).unsqueeze(0)
+    
+    input_shape = dummy_tensor.shape
+    num_classes = len(genres_df.columns)
+
+    predictor = GenrePredictor(
+        model_path='logs/music_cnn_model.pth',
+        input_shape=input_shape,
+        num_classes=len(genres_df.columns),
+        genre_map=final_genre_map
+    )
+    
+    # Путь к аудио
+    audio_dir = 'Musics/fma_medium'
+    original_tracks_df = pd.read_csv('Musics/fma_metadata/fma_metadata/tracks.csv', header=[0, 1], index_col=0)
+    
+    val_track_ids_full = original_tracks_df[original_tracks_df[('set', 'split')] == 'validation'].index
+    available_val_ids = list(set(val_track_ids_full) & set(genres_df.index))
+    
+    print(f"{len(available_val_ids)} треков в валидационной выборке")
+    NUM_TRACKS_TO_TEST = 5 * 5
+    tracks_to_test = random.sample(available_val_ids, NUM_TRACKS_TO_TEST)
+    print(f"  ТЕСТ СЛУЧАЙНЫХ ТРЕКОВ")
+
+
+    for track_id in tracks_to_test:
+        import os
+        filename = f"{track_id:06d}.mp3"
+        sub_folder = f"{track_id:06d}"[:3]
+        track_path = os.path.join(audio_dir, sub_folder, filename)
+
+        if not os.path.exists(track_path):
+            continue
+        predicted_genres = predictor.predict_genres(track_path)
+
+        true_labels_series = genres_df.loc[track_id]
+        
+        true_genre_indices = true_labels_series[true_labels_series == 1].index
+        true_genres = [genre_id_to_name.get(int(genre_id), f"Неизвестный ID {genre_id}") for genre_id in true_genre_indices]
+
+        print(f"Трек: {track_id}")
+        print(" Предсказание модели:")
+        if predicted_genres:
+            for genre, prob in predicted_genres:
+                print(f"     - {genre}: {prob:.2%}")
+        else:
+            print("нет предсказаний выше порога")
+            
+        print("Реальные жанры:")
+        for genre in sorted(true_genres):
+            print(f"     - {genre}")
+        print("-" * 60)
